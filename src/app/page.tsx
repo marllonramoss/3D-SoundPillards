@@ -2,7 +2,8 @@
 
 import FullScene from "@/components/FullScene";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import gsap from "gsap";
 
 export default function Home() {
   const [audioState, setAudioState] = useState<'stopped' | 'playing' | 'paused'>('stopped');
@@ -34,6 +35,32 @@ export default function Home() {
     else if (audioState === 'paused') setAudioState('playing');
   }
 
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  function handleButtonHover() {
+    if (buttonRef.current) {
+      gsap.to(buttonRef.current, {
+        scale: 1.25,
+        rotate: 2,
+        boxShadow: "0px 0px 24px 4px #d441ff",
+        duration: 0.8,
+        ease: "elastic.out(1, 0.5)",
+      });
+    }
+  }
+
+  function handleButtonLeave() {
+    if (buttonRef.current) {
+      gsap.to(buttonRef.current, {
+        scale: 1,
+        rotate: 0,
+        boxShadow: "0px 0px 0px 0px #d441ff",
+        duration: 0.4,
+        ease: "elastic.out(1, 0.5)",
+      });
+    }
+  }
+
   return (
     <div>
       <div className="max-w-7xl mx-auto absolute inset-0 z-30 py-24">
@@ -45,8 +72,11 @@ export default function Home() {
       </div>
       <span>Developed by <span className="font-bold">Marllon Ramos</span></span>
       <button
+        ref={buttonRef}
         className=" absolute bottom-0 right-0  z-40 w-12 h-12 rounded-full border-2 border-[#d441ff] shadow-none cursor-pointer flex items-center justify-center p-0 transition-colors duration-200"
         onClick={handleButtonClick}
+        onMouseEnter={handleButtonHover}
+        onMouseLeave={handleButtonLeave}
         aria-label={audioState === 'playing' ? 'Pausar áudio' : 'Tocar áudio'}
         >
         {buttonIcon}
