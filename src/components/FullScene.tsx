@@ -6,7 +6,9 @@ import { OrbitControls, useGLTF, Environment, ContactShadows, useTexture, shader
 import * as THREE from 'three'
 import { InstancedMesh, Object3D } from 'three'
 
-type Props = {}
+type Props = {
+  audioState: 'stopped' | 'playing' | 'paused'
+}
 
 // Hook para análise de áudio
 function useAudioAnalyser(audioUrl: string, fftSize = 128, playState: 'playing' | 'paused' | 'stopped' = 'stopped') {
@@ -448,65 +450,11 @@ function Particles({ count = 1000, radius = 12, yStart = -3.8, yEnd = 24 }) {
   )
 }
 
-export default function FullScene({}: Props) {
-  const [audioState, setAudioState] = useState<'stopped' | 'playing' | 'paused'>('stopped')
+export default function FullScene({ audioState }: Props) {
   const frequencies = useAudioAnalyser('/audio.mp3', 128, audioState)
-
-  let buttonLabel = 'Iniciar Áudio'
-  if (audioState === 'playing') buttonLabel = 'Pausar'
-  if (audioState === 'paused') buttonLabel = 'Retomar'
-
-  let buttonIcon = null
-  if (audioState === 'playing') {
-    // Pause icon
-    buttonIcon = (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="6" y="5" width="5" height="18" rx="2" fill="#fff"/>
-        <rect x="17" y="5" width="5" height="18" rx="2" fill="#fff"/>
-      </svg>
-    )
-  } else {
-    // Play icon
-    buttonIcon = (
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="16" cy="16" r="16" fill="rgba(0,0,0,0.15)"/>
-        <polygon points="13,10 24,16 13,22" fill="#fff"/>
-      </svg>
-    )
-  }
-
-  function handleButtonClick() {
-    if (audioState === 'stopped') setAudioState('playing')
-    else if (audioState === 'playing') setAudioState('paused')
-    else if (audioState === 'paused') setAudioState('playing')
-  }
 
   return (
     <div className="w-full h-screen" style={{ width: '100vw', height: '100vh' }}>
-      <button
-        style={{
-          position: 'fixed',
-          top: 24,
-          right: 24,
-          zIndex: 20,
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          background: 'rgba(0,0,0,0.0)',
-          border: 'none',
-          boxShadow: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 0,
-          transition: 'background 0.2s',
-        }}
-        onClick={handleButtonClick}
-        aria-label={audioState === 'playing' ? 'Pausar áudio' : 'Tocar áudio'}
-      >
-        {buttonIcon}
-      </button>
       <Canvas
         camera={{ 
           position: [0, 0, 8],
