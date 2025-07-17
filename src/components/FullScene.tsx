@@ -408,68 +408,41 @@ declare global {
   }
 }
 
-function Particles({ count = 1000, radius = 12 }) {
+function Particles({ count = 1000, radius = 12, yStart = -3.8, yEnd = 24 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
-  const materialRef = useRef<any>(null)
   const dummy = useMemo(() => new Object3D(), [])
-  // Distribuição volumétrica alta, começando logo acima do chão (y = -3.8)
-  // Agora com brilho aleatório
+  // Cada partícula tem x, z, speed, offset
   const particles = useMemo(() => {
     const arr = []
     for (let i = 0; i < count; i++) {
       const x = (Math.random() - 0.5) * 2 * radius
-      const y = -3.8 + Math.random() * (24.0 + 3.8)
       const z = (Math.random() - 0.5) * 2 * radius
-      arr.push({
-        x, y, z,
-        speed: 0.2 + Math.random() * 0.8,
-        offset: Math.random() * 1000,
-        scale: 0.01 + Math.random() * 0.02,
-        brightness: 0.6 + Math.random() * 0.7 // brilho aleatório entre 0.6 e 1.3
-      })
+      const speed = 1 + Math.random() * 1.5 // velocidade aleatória
+      const offset = Math.random() * 1000
+      arr.push({ x, z, speed, offset })
     }
     return arr
   }, [count, radius])
 
-  // Instancia o buffer de brilho ANTES do render
-  useLayoutEffect(() => {
-    if (!meshRef.current) return
-    const brightnessArray = new Float32Array(count)
-    for (let i = 0; i < count; i++) {
-      brightnessArray[i] = particles[i].brightness
-    }
-    meshRef.current.geometry.setAttribute('instanceBrightness', new THREE.InstancedBufferAttribute(brightnessArray, 1))
-  }, [particles, count])
-
   useFrame((state) => {
     if (!meshRef.current) return
     const t = state.clock.getElapsedTime()
+    const range = yEnd - yStart
     for (let i = 0; i < count; i++) {
       const p = particles[i]
-      const time = t * p.speed + p.offset
-      dummy.position.set(
-        p.x + Math.sin(time * 0.5) * 0.5,
-        p.y + Math.cos(time * 0.7) * 0.5,
-        p.z + Math.sin(time * 0.3) * 0.5
-      )
-      dummy.scale.setScalar(p.scale + Math.sin(time) * 0.003)
+      // y sobe de yStart até yEnd, depois volta para yStart
+      const y = yStart + ((t * p.speed + p.offset) % range)
+      dummy.position.set(p.x, y, p.z)
+      dummy.scale.setScalar(0.01 + Math.random() * 0.02)
       dummy.updateMatrix()
       meshRef.current.setMatrixAt(i, dummy.matrix)
     }
     meshRef.current.instanceMatrix.needsUpdate = true
-    if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value = t
-    }
   })
 
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, count]}
-      key={count + '-' + radius} // força atualização
-    >
+    <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
       <sphereGeometry args={[1, 8, 8]} />
-      {/* DEBUG: material padrão para testar visualização */}
       <meshBasicMaterial color="#fff" />
     </instancedMesh>
   )
