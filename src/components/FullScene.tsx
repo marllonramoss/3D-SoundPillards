@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useEffect, useMemo, useState, useLayoutEffect } from 'react'
-import { Canvas, useFrame, extend } from '@react-three/fiber'
+import { Canvas, useFrame, extend, useThree } from '@react-three/fiber'
 import { OrbitControls, useGLTF, Environment, ContactShadows, useTexture, shaderMaterial } from '@react-three/drei'
 import * as THREE from 'three'
 import { InstancedMesh, Object3D } from 'three'
@@ -450,6 +450,23 @@ function Particles({ count = 1000, radius = 12, yStart = -3.8, yEnd = 24 }) {
   )
 }
 
+// Componente para rotacionar a câmera lentamente para a direita
+function RotatingCamera() {
+  const { camera } = useThree()
+  const radius = 8 // mesmo valor do position inicial
+  const y = 0
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime()
+    // Ângulo aumenta lentamente (ajuste a velocidade multiplicando t)
+    const angle = t * 0.15 // 0.15 é a velocidade, ajuste se quiser mais rápido/lento
+    camera.position.x = Math.sin(angle) * radius
+    camera.position.z = Math.cos(angle) * radius
+    camera.position.y = y
+    camera.lookAt(0, 0, 0)
+  })
+  return null
+}
+
 export default function FullScene({ audioState }: Props) {
   const frequencies = useAudioAnalyser('/audio.mp3', 128, audioState)
 
@@ -463,6 +480,7 @@ export default function FullScene({ audioState }: Props) {
           far: 1000
         }}
       >
+        <RotatingCamera />
         {/* Instancia vários Pillards na superfície de uma esfera */}
         <PillardsOnSphere radius={2} count={150} frequencies={frequencies} />
         {/* Floor */}
@@ -471,12 +489,12 @@ export default function FullScene({ audioState }: Props) {
         <SpectrumWaveEffect />
         {/* Partículas cinematográficas */}
         <Particles count={1000} radius={12} />
-        <OrbitControls 
+        {/* <OrbitControls 
           enablePan={true}
           enableZoom={true}
           enableRotate={true}
           maxPolarAngle={Math.PI / 2}
-        />
+        /> */}
       </Canvas>
     </div>
   )
