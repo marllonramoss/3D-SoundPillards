@@ -1,13 +1,91 @@
 'use client'
 
-import React, { useRef, useEffect, useMemo } from 'react'
+import React, { useRef, useEffect, useMemo, useState } from 'react'
 import { Canvas, useFrame, extend } from '@react-three/fiber'
 import { OrbitControls, useGLTF, Environment, ContactShadows, useTexture, shaderMaterial } from '@react-three/drei'
 import * as THREE from 'three'
 
 type Props = {}
 
-function PillardModel({ scale = 1, phaseOffset = 0 }: { scale?: number, phaseOffset?: number }) {
+// Hook para análise de áudio
+function useAudioAnalyser(audioUrl: string, fftSize = 128, playState: 'playing' | 'paused' | 'stopped' = 'stopped') {
+  const [frequencies, setFrequencies] = useState<number[]>([])
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
+  const rafRef = useRef<number>()
+
+  useEffect(() => {
+    if (!audioRef.current) {
+      const audio = new Audio(audioUrl)
+      audio.crossOrigin = 'anonymous'
+      audio.loop = true
+      audioRef.current = audio
+      ctxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const source = ctxRef.current.createMediaElementSource(audio)
+      const analyser = ctxRef.current.createAnalyser()
+      analyser.fftSize = fftSize
+      source.connect(analyser)
+      analyser.connect(ctxRef.current.destination)
+      analyserRef.current = analyser
+    }
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+      if (ctxRef.current) {
+        ctxRef.current.close()
+        ctxRef.current = null
+      }
+      if (rafRef.current !== undefined) {
+        cancelAnimationFrame(rafRef.current!)
+      }
+    }
+  }, [audioUrl, fftSize])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    const ctx = ctxRef.current
+    if (!audio || !ctx) return
+    if (playState === 'playing') {
+      ctx.resume()
+      audio.play()
+      const analyser = analyserRef.current
+      if (!analyser) return
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      let running = true
+      function update() {
+        if (!running) return
+        if (analyser) {
+          analyser.getByteFrequencyData(dataArray)
+          setFrequencies(Array.from(dataArray))
+        }
+        rafRef.current = window.requestAnimationFrame(update)
+      }
+      update()
+      return () => { running = false }
+    } else if (playState === 'paused') {
+      audio.pause()
+      ctx.suspend()
+      if (rafRef.current !== undefined) {
+        cancelAnimationFrame(rafRef.current!)
+      }
+    } else if (playState === 'stopped') {
+      audio.pause()
+      audio.currentTime = 0
+      ctx.suspend()
+      setFrequencies([])
+      if (rafRef.current !== undefined) {
+        cancelAnimationFrame(rafRef.current!)
+      }
+    }
+  }, [playState])
+
+  return frequencies
+}
+
+function PillardModel({ scale = 1, phaseOffset = 0, freqValue = 0 }: { scale?: number, phaseOffset?: number, freqValue?: number }) {
   const { scene } = useGLTF('pillardFIXEDAGAIN.glb')
   const modelRef = useRef<THREE.Group>(null)
 
@@ -41,9 +119,13 @@ function PillardModel({ scale = 1, phaseOffset = 0 }: { scale?: number, phaseOff
     if (modelRef.current) {
       modelRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.1
     }
-    // Anima o Cylinder subindo e descendo com efeito de onda
+    // Anima o Cylinder de acordo com a frequência (impacto aumentado)
     if (cylinderRef.current) {
-      cylinderRef.current.position.y = 1.0 + Math.sin(state.clock.elapsedTime * 4 + phaseOffset) * 1.2
+      // freqValue: 0-255, normaliza e aplica curva exponencial para mais contraste
+      const impact = 3.5;
+      const normalized = Math.pow(freqValue / 255, 1.5);
+      const freqScale = 1.0 + normalized * impact;
+      cylinderRef.current.position.y = freqScale;
     }
   })
 
@@ -69,7 +151,7 @@ function FloorModel() {
   )
 }
 
-function PillardsOnSphere({ radius = 2, count = 200 }) {
+function PillardsOnSphere({ radius = 2, count = 200, frequencies = [] }: { radius?: number, count?: number, frequencies?: number[] }) {
   // Gera pontos uniformemente distribuídos na esfera
   const positions = useMemo<[number, number, number][]>(() => {
     const pts: [number, number, number][] = []
@@ -107,9 +189,12 @@ function PillardsOnSphere({ radius = 2, count = 200 }) {
         // Calcula o ângulo entre o ponto e o topo da esfera
         const posVec = new THREE.Vector3(...pos)
         const angle = origin.angleTo(posVec)
+        // Associa cada pillard a uma frequência
+        const freqIndex = Math.floor(i / count * (frequencies.length || 1))
+        const freqValue = frequencies[freqIndex] || 0
         return (
           <group key={i} position={pos as [number, number, number]} quaternion={quaternion}>
-            <PillardModel scale={0.2} phaseOffset={angle * 2} />
+            <PillardModel scale={0.2} phaseOffset={angle * 2} freqValue={freqValue} />
           </group>
         )
       })}
@@ -275,8 +360,64 @@ function SpectrumWaveEffect() {
 }
 
 export default function FullScene({}: Props) {
+  const [audioState, setAudioState] = useState<'stopped' | 'playing' | 'paused'>('stopped')
+  const frequencies = useAudioAnalyser('/audio.mp3', 128, audioState)
+
+  let buttonLabel = 'Iniciar Áudio'
+  if (audioState === 'playing') buttonLabel = 'Pausar'
+  if (audioState === 'paused') buttonLabel = 'Retomar'
+
+  let buttonIcon = null
+  if (audioState === 'playing') {
+    // Pause icon
+    buttonIcon = (
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="5" width="5" height="18" rx="2" fill="#fff"/>
+        <rect x="17" y="5" width="5" height="18" rx="2" fill="#fff"/>
+      </svg>
+    )
+  } else {
+    // Play icon
+    buttonIcon = (
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="16" r="16" fill="rgba(0,0,0,0.15)"/>
+        <polygon points="13,10 24,16 13,22" fill="#fff"/>
+      </svg>
+    )
+  }
+
+  function handleButtonClick() {
+    if (audioState === 'stopped') setAudioState('playing')
+    else if (audioState === 'playing') setAudioState('paused')
+    else if (audioState === 'paused') setAudioState('playing')
+  }
+
   return (
     <div className="w-full h-screen" style={{ width: '100vw', height: '100vh' }}>
+      <button
+        style={{
+          position: 'fixed',
+          top: 24,
+          right: 24,
+          zIndex: 20,
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          background: 'rgba(0,0,0,0.0)',
+          border: 'none',
+          boxShadow: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+          transition: 'background 0.2s',
+        }}
+        onClick={handleButtonClick}
+        aria-label={audioState === 'playing' ? 'Pausar áudio' : 'Tocar áudio'}
+      >
+        {buttonIcon}
+      </button>
       <Canvas
         camera={{ 
           position: [0, 0, 8],
@@ -286,7 +427,7 @@ export default function FullScene({}: Props) {
         }}
       >
         {/* Instancia vários Pillards na superfície de uma esfera */}
-        <PillardsOnSphere radius={2} count={150} />
+        <PillardsOnSphere radius={2} count={150} frequencies={frequencies} />
         {/* Floor */}
         <FloorModel />
         {/* Spectrum Model */}
