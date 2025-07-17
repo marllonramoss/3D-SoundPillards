@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useRef, useEffect, useMemo, useState } from 'react'
+import React, { useRef, useEffect, useMemo, useState, useLayoutEffect } from 'react'
 import { Canvas, useFrame, extend } from '@react-three/fiber'
 import { OrbitControls, useGLTF, Environment, ContactShadows, useTexture, shaderMaterial } from '@react-three/drei'
 import * as THREE from 'three'
+import { InstancedMesh, Object3D } from 'three'
 
 type Props = {}
 
@@ -359,6 +360,121 @@ function SpectrumWaveEffect() {
   )
 }
 
+// Shader cinematográfico para partículas (azul/ciano, glow, fade nas bordas)
+const ParticleMaterial = shaderMaterial(
+  {
+    uColor: new THREE.Color('#ffffff'), // branco
+    uTime: 0,
+    uAlpha: 0.85,
+  },
+  // Vertex
+  `
+    attribute float instanceBrightness;
+    varying vec2 vUv;
+    varying float vFade;
+    varying float vBrightness;
+    void main() {
+      vUv = uv;
+      vBrightness = instanceBrightness;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      float dist = length(mvPosition.xyz);
+      vFade = 1.0 - smoothstep(5.0, 20.0, dist); // fade com distância
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  // Fragment
+  `
+    uniform vec3 uColor;
+    uniform float uAlpha;
+    varying vec2 vUv;
+    varying float vFade;
+    varying float vBrightness;
+    void main() {
+      float d = length(vUv - 0.5) * 2.0;
+      float alpha = smoothstep(1.0, 0.7, d) * uAlpha * vFade * vBrightness;
+      if (alpha < 0.01) discard;
+      vec3 color = uColor * vBrightness + vec3(0.7, 0.8, 1.0) * (1.0 - d) * 0.15;
+      gl_FragColor = vec4(color, alpha);
+    }
+  `
+)
+extend({ ParticleMaterial })
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      particleMaterial: any
+    }
+  }
+}
+
+function Particles({ count = 1000, radius = 12 }) {
+  const meshRef = useRef<THREE.InstancedMesh>(null)
+  const materialRef = useRef<any>(null)
+  const dummy = useMemo(() => new Object3D(), [])
+  // Distribuição volumétrica alta, começando logo acima do chão (y = -3.8)
+  // Agora com brilho aleatório
+  const particles = useMemo(() => {
+    const arr = []
+    for (let i = 0; i < count; i++) {
+      const x = (Math.random() - 0.5) * 2 * radius
+      const y = -3.8 + Math.random() * (24.0 + 3.8)
+      const z = (Math.random() - 0.5) * 2 * radius
+      arr.push({
+        x, y, z,
+        speed: 0.2 + Math.random() * 0.8,
+        offset: Math.random() * 1000,
+        scale: 0.01 + Math.random() * 0.02,
+        brightness: 0.6 + Math.random() * 0.7 // brilho aleatório entre 0.6 e 1.3
+      })
+    }
+    return arr
+  }, [count, radius])
+
+  // Instancia o buffer de brilho ANTES do render
+  useLayoutEffect(() => {
+    if (!meshRef.current) return
+    const brightnessArray = new Float32Array(count)
+    for (let i = 0; i < count; i++) {
+      brightnessArray[i] = particles[i].brightness
+    }
+    meshRef.current.geometry.setAttribute('instanceBrightness', new THREE.InstancedBufferAttribute(brightnessArray, 1))
+  }, [particles, count])
+
+  useFrame((state) => {
+    if (!meshRef.current) return
+    const t = state.clock.getElapsedTime()
+    for (let i = 0; i < count; i++) {
+      const p = particles[i]
+      const time = t * p.speed + p.offset
+      dummy.position.set(
+        p.x + Math.sin(time * 0.5) * 0.5,
+        p.y + Math.cos(time * 0.7) * 0.5,
+        p.z + Math.sin(time * 0.3) * 0.5
+      )
+      dummy.scale.setScalar(p.scale + Math.sin(time) * 0.003)
+      dummy.updateMatrix()
+      meshRef.current.setMatrixAt(i, dummy.matrix)
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true
+    if (materialRef.current) {
+      materialRef.current.uniforms.uTime.value = t
+    }
+  })
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[undefined, undefined, count]}
+      key={count + '-' + radius} // força atualização
+    >
+      <sphereGeometry args={[1, 8, 8]} />
+      {/* DEBUG: material padrão para testar visualização */}
+      <meshBasicMaterial color="#fff" />
+    </instancedMesh>
+  )
+}
+
 export default function FullScene({}: Props) {
   const [audioState, setAudioState] = useState<'stopped' | 'playing' | 'paused'>('stopped')
   const frequencies = useAudioAnalyser('/audio.mp3', 128, audioState)
@@ -432,6 +548,8 @@ export default function FullScene({}: Props) {
         <FloorModel />
         {/* Spectrum Model */}
         <SpectrumWaveEffect />
+        {/* Partículas cinematográficas */}
+        <Particles count={1000} radius={12} />
         <OrbitControls 
           enablePan={true}
           enableZoom={true}
