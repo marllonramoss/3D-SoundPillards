@@ -454,7 +454,7 @@ function Particles({ count = 1000, radius = 12, yStart = -3.8, yEnd = 24 }) {
 function RotatingCamera() {
   const { camera } = useThree()
   const radius = 8 // mesmo valor do position inicial
-  const y = 0
+  const y = -2
   useFrame((state) => {
     const t = state.clock.getElapsedTime()
     // Ângulo aumenta lentamente (ajuste a velocidade multiplicando t)
@@ -474,12 +474,13 @@ export default function FullScene({ audioState }: Props) {
     <div className="w-full h-screen" style={{ width: '100vw', height: '100vh' }}>
       <Canvas
         camera={{ 
-          position: [0, 0, 8],
+          position: [0, -2, 8],
           fov: 75,
           near: 0.1,
           far: 1000
         }}
       >
+        <fog attach="fog" args={['#000000', 5, 20]} />
         <RotatingCamera />
         {/* Instancia vários Pillards na superfície de uma esfera */}
         <PillardsOnSphere radius={2} count={150} frequencies={frequencies} />
