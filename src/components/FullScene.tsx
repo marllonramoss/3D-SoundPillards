@@ -16,7 +16,7 @@ function useAudioAnalyser(audioUrl: string, fftSize = 128, playState: 'playing' 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const ctxRef = useRef<AudioContext | null>(null)
-  const rafRef = useRef<number>()
+  const rafRef = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     if (!audioRef.current) {
@@ -308,14 +308,6 @@ const WaveMaterial = shaderMaterial(
 )
 extend({ WaveMaterial })
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      waveMaterial: any
-    }
-  }
-}
-
 function SpectrumWaveEffect() {
   const { scene } = useGLTF('/Spectrum.glb')
   const meshRef = useRef<THREE.Mesh>(null)
@@ -405,6 +397,7 @@ extend({ ParticleMaterial })
 declare global {
   namespace JSX {
     interface IntrinsicElements {
+      waveMaterial: any
       particleMaterial: any
     }
   }

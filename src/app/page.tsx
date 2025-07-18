@@ -1,12 +1,14 @@
 'use client'
 
 import FullScene from "@/components/FullScene";
+import LoadingScreen from "@/components/LoadingScreen";
 import Image from "next/image";
 import { useState, useRef } from "react";
 import gsap from "gsap";
 
 export default function Home() {
   const [audioState, setAudioState] = useState<'stopped' | 'playing' | 'paused'>('stopped');
+  const [isLoading, setIsLoading] = useState(true);
 
   let buttonLabel = 'Iniciar Áudio';
   if (audioState === 'playing') buttonLabel = 'Pausar';
@@ -61,8 +63,13 @@ export default function Home() {
     }
   }
 
+  function handleLoadingComplete() {
+    setIsLoading(false);
+  }
+
   return (
     <div>
+      {isLoading && <LoadingScreen onLoadingComplete={handleLoadingComplete} />}
       <div className="max-w-7xl mx-auto absolute inset-0 z-30 py-24">
         <div className="flex flex-col gap-4  w-full h-full relative justify-between">
       <div className="flex flex-col gap-1 ">
